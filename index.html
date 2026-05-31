@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hollow Knight: El Archivo del Vacío y la Luz</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js para análisis de builds -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #08090c; 
+            color: #d1d5db; 
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Evita que el iframe fuerce scrollbars externas */
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        h1, h2, h3, h4 { 
+            font-family: 'Cinzel', serif; 
+            letter-spacing: 0.05em;
+        }
+        .text-decorative {
+            font-family: 'Cinzel Decorative', serif;
+        }
+        
+        .tab-btn { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active { 
+            background: linear-gradient(180deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.8) 100%);
+            color: #f3f4f6; 
+            border-bottom-color: #38bdf8;
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+        }
+        
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(8px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        /* Control estricto de altura para iFrames de Google Sites */
+        .content-scrollable {
+            max-height: calc(100vh - 190px); /* Ajusta dinámicamente el scroll interno */
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 6px;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            height: 240px;
+            background-color: #0f1115;
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            border: 1px solid #1f2937;
+        }
+
+        .accordion-content { display: none; }
+        .accordion-content.show { display: block; animation: fadeIn 0.3s ease-out; }
+        
+        .notch-slot { 
+            display: inline-block; 
+            width: 10px; 
+            height: 10px; 
+            border-radius: 50%; 
+            border: 1px solid #6b7280; 
+            background-color: transparent; 
+            margin-right: 3px;
+        }
+        .notch-filled { 
+            background-color: #38bdf8; 
+            border-color: #0284c7;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+        }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #060709; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+
+        .soul-glow { text-shadow: 0 0 10px rgba(56, 189, 248, 0.6); }
+        .infection-glow { text-shadow: 0 0 10px rgba(245, 158, 11, 0.6); }
+        .grimm-glow { text-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+        
+        .hk-frame {
+            border: 2px solid #1f2937;
+            background-color: #0d0f13;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
+            position: relative;
+        }
+        .hk-frame::before {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px; right: 2px; bottom: 2px;
+            border: 1px dashed #374151;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Reproductor de Audio Flotante Adaptado -->
+    <div id="audio-panel" class="fixed bottom-3 right-3 z-50 bg-[#0f1115]/95 border border-gray-800 p-2.5 rounded-xl shadow-2xl flex items-center gap-3 max-w-[240px] transition-transform duration-300">
+        <div class="flex items-center gap-2">
+            <span class="text-sky-400 text-base animate-pulse">🎵</span>
+            <div class="max-w-[110px] overflow-hidden">
+                <p class="text-[10px] font-bold text-gray-200 truncate" id="song-title">Cargando música...</p>
+                <p class="text-[8px] text-gray-500 tracking-wider">Música de Fondo</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5 border-l border-gray-800 pl-2">
+            <button onclick="prevSong()" class="text-[10px] text-gray-400 hover:text-sky-400">⏮</button>
+            <button onclick="toggleAudio()" id="play-btn" class="w-6 h-6 rounded-full bg-sky-500/10 hover:bg-sky-500/30 border border-sky-500/50 flex items-center justify-center text-sky-400 text-[10px] transition">▶</button>
+            <button onclick="nextSong()" class="text-[10px] text-gray-400 hover:text-sky-400">⏭</button>
+        </div>
+
+        <audio id="audio-player" onended="nextSong()">
+            <source id="audio-source" src="" type="audio/mpeg">
+        </audio>
+    </div>
+
+    <!-- Encabezado Compactado para optimizar espacio del iFrame -->
+    <header class="bg-gradient-to-b from-black to-[#08090c] py-4 px-4 text-center border-b border-gray-900 shrink-0">
+        <h1 class="text-2xl md:text-3xl font-bold tracking-widest text-gray-100 text-decorative soul-glow">HOLLOW KNIGHT</h1>
+        <p class="text-[10px] md:text-xs font-light text-sky-400/80 tracking-widest uppercase mt-0.5">El Archivo del Vacío y la Luz</p>
+    </header>
+
+    <!-- Navegación por pestañas SPA Compacta -->
+    <div class="w-full px-2 mt-2 shrink-0">
+        <div class="flex flex-wrap gap-1 bg-[#101216] p-1 rounded-xl border border-gray-800/80">
+            <button onclick="switchTab('inicio')" id="tab-inicio" class="tab-btn active flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1">
+                🏠 Inicio
+            </button>
+            <button onclick="switchTab('instalacion')" id="tab-instalacion" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1">
+                🎮 Steam
+            </button>
+            <button onclick="switchTab('lore')" id="tab-lore" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1">
+                📖 Lore
+            </button>
+            <button onclick="switchTab('arsenal')" id="tab-arsenal" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1">
+                🛡️ Arsenal
+            </button>
+            <button onclick="switchTab('combate')" id="tab-combate" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1 font-bold text-sky-300">
+                ⚔️ Tácticas
+            </button>
+            <button onclick="switchTab('secretos')" id="tab-secretos" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-semibold hover:text-white flex items-center justify-center gap-1">
+                🔮 Secretos
+            </button>
+            <button onclick="switchTab('oraculo')" id="tab-oraculo" class="tab-btn flex-1 py-1.5 text-center rounded-lg text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center justify-center gap-1 border-l border-gray-800">
+                ✨ Oráculo
+            </button>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal Adaptable y Estrictamente Limitado en Altura -->
+    <main class="flex-grow w-full px-2 py-3 overflow-hidden">
+        <div id="dynamic-content" class="bg-[#101216]/95 p-4 md:p-6 rounded-2xl border border-gray-800/80 shadow-2xl h-full flex flex-col justify-between">
+            <!-- El contenido interactivo se carga dinámicamente con scroll interno aquí -->
+        </div>
+    </main>
+
+    <!-- LOGICA JAVASCRIPT & ARQUITECTURA DE DATOS -->
+    <script>
+        const apiKey = ""; 
+        const geminiModel = "gemini-2.5-flash-preview-09-2025";
+
+        // =====================================================================
+        //    DIRECCIONES DE RECURSOS EN LA NUBE (PERSONALIZABLE)
+        // =====================================================================
+        
+        // Archivos de audio (puedes cambiarlos por enlaces de Drive o dejarlos locales)
+        const remotePlaylist = [
+            { id: 1, file: "musica1.mp3", title: "Tema Principal" },
+            { id: 2, file: "musica2.mp3", title: "Sendero Verde" },
+            { id: 3, file: "musica3.mp3", title: "Ciudad de Lágrimas" },
+            { id: 4, file: "musica4.mp3", title: "El Combate del Destello" }
+        ];
+
+        // Archivos de imágenes locales que subiste
+        const remoteImages = {
+            bocasucia: "image_87af88.png",
+            steam: "image_87afa6.png",
+            radiance: "image_87afc3.png",
+            greenpath: "image_87afe0.png",
+            inventario: "image_87b303.png",
+            amuletos: "image_87b342.png",
+            grimm: "image_87b361.png",
+            reyPesadilla: "image_87b382.jpg",
+            godmaster: "image_87b3a3.png"
+        };
+
+        // =====================================================================
+
+        async function fetchGemini(payload, retries = 5, delay = 1000) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) return await response.json();
+                } catch (error) {}
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; 
+            }
+            throw new Error("El vacío no responde. Inténtalo de nuevo.");
+        }
+
+        let currentTrackIdx = 0;
+        let isPlaying = false;
+
+        const player = document.getElementById('audio-player');
+        const playBtn = document.getElementById('play-btn');
+        const songTitle = document.getElementById('song-title');
+
+        function loadTrack(idx) {
+            currentTrackIdx = idx;
+            const track = remotePlaylist[currentTrackIdx];
+            document.getElementById('audio-source').src = track.file;
+            player.load();
+            songTitle.textContent = track.title;
+            if (isPlaying) player.play();
+        }
+
+        function toggleAudio() {
+            if (isPlaying) {
+                player.pause();
+                playBtn.innerHTML = "▶";
+                isPlaying = false;
+            } else {
+                player.play().then(() => {
+                    playBtn.innerHTML = "⏸";
+                    isPlaying = true;
+                }).catch(() => {});
+            }
+        }
+
+        function nextSong() {
+            currentTrackIdx = (currentTrackIdx + 1) % remotePlaylist.length;
+            loadTrack(currentTrackIdx);
+        }
+
+        function prevSong() {
+            currentTrackIdx = (currentTrackIdx - 1 + remotePlaylist.length) % remotePlaylist.length;
+            loadTrack(currentTrackIdx);
+        }
+
+        loadTrack(0);
+
+        function handleImageError(img, altName) {
+            const filename = img.getAttribute('src');
+            const parent = img.parentElement;
+            if (parent) {
+                parent.innerHTML = `
+                    <div class="w-full h-full min-h-[140px] bg-gradient-to-br from-[#0d0f13] to-[#050608] flex flex-col items-center justify-center p-4 text-center border border-gray-800 rounded-lg">
+                        <span class="text-2xl mb-1">🖼️</span>
+                        <h4 class="text-[10px] font-bold text-sky-400 uppercase tracking-wider">${altName}</h4>
+                        <p class="text-[9px] text-gray-500 max-w-xs leading-tight mt-1">Guarda esta imagen con el nombre:</p>
+                        <code class="text-[9px] text-sky-300 font-mono bg-black/60 px-1.5 py-0.5 mt-1 rounded border border-sky-950">${filename}</code>
+                    </div>
+                `;
+            }
+        }
+
+        const pageData = {
+            inicio: {
+                title: "Portal de Entrada a Hallownest",
+                intro: "Bienvenido a la guía definitiva de Hollow Knight. Accede a las versiones oficiales provistas a continuación e inicia tu travesía por el reino.",
+                links: {
+                    pc: "https://drive.google.com/file/d/1hi6XWDKgqTQIP5UTMNHERmBsNcF-X_h8/view?usp=sharing",
+                    phone: "https://drive.google.com/file/d/1XB4aIQj4MB-jLLgta-Pz55MBWSwucrCc/view?pli=1"
+                }
+            },
+            instalacion: {
+                title: "Guía de Integración a Steam (Versión PC)",
+                intro: "Añade el ejecutable descargado como un juego que no es de Steam para habilitar el mapeado nativo de mandos de consola.",
+                pasos: [
+                    { paso: "1", desc: "Extrae el archivo comprimido del juego en una carpeta definitiva (Ej: <code>C:/Juegos/HollowKnight</code>)." },
+                    { paso: "2", desc: "Abre la aplicación de Steam e inicia sesión." },
+                    { paso: "3", desc: "Haz clic abajo a la izquierda en <strong>'+ Añadir un producto'</strong>." },
+                    { paso: "4", desc: "Selecciona <strong>'Añadir un producto que no es de Steam...'</strong>." },
+                    { paso: "5", desc: "Haz clic en <strong>'Buscar...'</strong>, selecciona el archivo <code>Hollow Knight.exe</code> y haz clic en abrir." },
+                    { paso: "6", desc: "Haz clic en el botón azul <strong>'Añadir seleccionados'</strong>." }
+                ],
+                consejo: "¡Listo! El juego ahora se ejecutará con soporte nativo de Steam Input."
+            },
+            lore: {
+                title: "El Destino Olvidado de Hallownest",
+                pregunta: "¿Qué es Hollow Knight?",
+                text_intro: "Hollow Knight es una epopeya interactiva del género Metroidvania 2D. Controlas a un guerrero silencioso y misterioso armado con un aguijón gastado, que desciende a las profundidades del antiguo reino de insectos conocido como Hallownest.",
+                historia: "El reino de Hallownest prosperó bajo el liderazgo del Rey Pálido, un ser de inmenso poder que dotó de intelecto y libre albedrío a las criaturas de la tierra. Pero antes de su reinado, los insectos adoraban a una deidad de luz pura y onírica llamada El Destello (The Radiance). Al ser olvidada por el pueblo, la antigua diosa comenzó a manifestarse en los sueños colectivos, provocando una violenta epidemia de demencia conocida como La Infección. Para contener la plaga, el rey ideó un plan sombrío: sacrificar a miles de niños biológicos en el Abismo para forjar vasijas huecas desprovistas de mente, voluntad o sentimientos. El contenedor elegido, el 'Hollow Knight', fue sellado en el Templo del Huevo Negro, pero una imperfección interna permitió que la infección se reanudara. Tu misión es romper los sellos de los tres Soñadores para reclamar el destino de Hallownest.",
+                zonas: [
+                    { nombre: "Bocasucia", clima: "Nostálgico y frío", clave: "El último pueblo habitable de Hallownest. Aquí descansa Elderbug y se establecen los mercaderes clave." },
+                    { nombre: "Cruces Olvidados", clima: "Piedra húmeda", clave: "Las autopistas viales del reino. Tras eliminar a un Soñador, muta a 'Cruces Infectados' bloqueando rutas." },
+                    { nombre: "Sendero Verde", clima: "Naturaleza exuberante", clave: "Un laberinto de musgo, cascadas ácidas y plantas cazadoras. Primer encuentro decisivo con Hornet." },
+                    { nombre: "Páramos Fúngicos", clima: "Fútbol fúngico y esporas", clave: "Hogar de la tribu de las Mantis. Aquí debes superar el desafío de sus líderes para ganar su respeto." },
+                    { nombre: "Ciudad de Lágrimas", clima: "Lluvia perpetua", clave: "La majestuosa capital. Construida bajo un lago subterráneo que filtra lluvia de forma incesante." },
+                    { nombre: "Nido Profundo", clima: "Oscuro e inexpugnable", clave: "Un laberinto hostil plagado de trampas de araña y pasillos claustrofóbicos. Carece de estaciones de ciervo normales." }
+                ]
+            },
+            arsenal: {
+                title: "Habilidades, Hechizos y Amuletos",
+                descripcion: "Mejora el armamento físico y mágico de la vasija para adaptarlo a tu estilo de juego preferido.",
+                habilidades: [
+                    { nombre: "Capa de Ala de Polilla", desc: "Permite impulsarse rápidamente hacia adelante en el suelo o en el aire.", tipo: "Movimiento" },
+                    { nombre: "Garras de Mantis", desc: "Habilita la capacidad de aferrarse a las paredes e impulsarse verticalmente.", tipo: "Movimiento" },
+                    { nombre: "Alas de Monarca", desc: "El clásico doble salto que permite esquivar ataques altos y alcanzar cornisas elevadas.", tipo: "Movimiento" },
+                    { nombre: "Capa Sombría", desc: "Mejora del dash que te otorga frames de total invulnerabilidad y te permite pasar a través de enemigos.", tipo: "Movimiento/Combate" },
+                    { nombre: "Salto Desolador / Oscuridad Descendente", desc: "Golpe sísmico que rompe suelos endebles e inflige daño. Otorga valiosos frames de inmunidad.", tipo: "Hechizo" },
+                    { nombre: "Espectros Aulladores / Chillido del Abismo", desc: "Invocación de grito espectral hacia arriba. El ataque de mayor daño por segundo en el juego.", tipo: "Hechizo" }
+                ],
+                amuletos: [
+                    { nombre: "Fuerza Irrompible", costo: 3, desc: "Aumenta el daño físico de tu aguijón en un devastador 50%." },
+                    { nombre: "Piedra del Chamán", costo: 3, desc: "Incrementa el tamaño de todos los hechizos y su fuerza en más de un 33%." },
+                    { nombre: "Corte Rápido", costo: 3, desc: "Aumenta la velocidad de oscilación de tu espada para arrinconar enemigos." },
+                    { nombre: "Marca de Orgullo", costo: 3, desc: "Aumenta significativamente el rango de tu espada para golpear seguro." }
+                ],
+                builds: [
+                    { nombre: "Melee / Aguijón Puro", desc: "Fuerza Irrompible + Corte Rápido + Marca de Orgullo. Ideal para combate físico continuo.", stats: [95, 20, 30, 80] },
+                    { nombre: "Invocador / Mago", desc: "Piedra del Chamán + Tuercehechizos + Atrapaalmas. Diseñado para spammerar Chillidos del Abismo.", stats: [20, 95, 45, 40] },
+                    { nombre: "Tanque Defensivo", desc: "Concentración Rápida + Coraza de Baldur + Corazón de Melodía. Para sanarte bajo presión extrema.", stats: [30, 35, 95, 50] }
+                ]
+            },
+            combate: {
+                title: "Estrategias de Combate y Skips de Movilidad",
+                tecnicas: [
+                    {
+                        nombre: "Mecánica de Pogo (Rebote aéreo)",
+                        desc: "Consiste en atacar hacia abajo en el aire justo al pasar por encima de un enemigo, pincho o peligro. Esta técnica te mantiene suspendido y recarga el doble salto y el dash de forma instantánea.",
+                        aplicacion: "<strong>Esquivar fase globo de Grimm:</strong> Cuando Grimm se infla en el centro para lanzar bolas de fuego, realizar pogo rítmicamente sobre su cabeza te mantendrá a salvo por encima de los proyectiles inferiores."
+                    },
+                    {
+                        nombre: "Descending Dark I-Frames",
+                        desc: "Al ejecutar el hechizo Oscuridad Descendente, obtienes invulnerabilidad desde que estás en el aire hasta aproximadamente 0.4 segundos después del impacto.",
+                        aplicacion: "<strong>Evadir espadas de Absolute Radiance:</strong> Cuando los proyectiles en rejilla o las ondas horizontales llenan la arena, usa este hechizo para absorber el daño sin moverte de tu plataforma."
+                    },
+                    {
+                        nombre: "Evasión con Capa Sombría (Shade Cloak)",
+                        desc: "No utilices el dash sombrío para retroceder. En combates complejos, dejas de preocuparte por la distancia y atraviesas el hitbox del enemigo.",
+                        aplicacion: "<strong>Contra Pure Vessel:</strong> Cuando te embista horizontalmente, haz un dash sombrío directo hacia él. Atravesarás su hitbox, evitarás el daño y quedarás listo para golpearlo por la espalda."
+                    },
+                    {
+                        nombre: "El Sistema de Parries (Bloqueo activo)",
+                        desc: "Si golpeas con tu aguijón exactamente en los mismos frames que un ataque físico de espada del enemigo, anularás el daño por completo, emitirás un destello blanco brillante y podrás asestar un contraataque inmediato sin retroceso.",
+                        aplicacion: "<strong>Dominación de Pure Vessel y Hollow Knight:</strong> Puedes cancelar sus ataques frontales rápidos si golpeas de forma rítmica justo cuando sus espadas destellan. Requiere un timing milimétrico."
+                    },
+                    {
+                        nombre: "Uso Táctico de la Forma de Unn (Shape of Unn)",
+                        desc: "Este amuleto te permite moverte libremente mientras te curas (concentras alma), pero lo más importante es que reduce el hitbox de tu cuerpo a la mitad al agacharte como un caracol verde.",
+                        aplicacion: "<strong>Esquivas de altura reducida:</strong> Te permite sanar y pasar por debajo de los murciélagos de fuego de Grimm, o deslizarte evadiendo las ondas de choque horizontales del False Knight sin necesidad de saltar."
+                    },
+                    {
+                        nombre: "Estrategias Integrales para Jefes Supremos",
+                        desc: "Los tres grandes jefes del final del juego requieren memorización exhaustiva de sus ventanas de daño seguro.",
+                        aplicacion: "<strong>NKG:</strong> Usa el dash sombrío solo durante su ataque de caída en picada con rastro de fuego. <strong>Pure Vessel:</strong> El doble salto es tu mejor opción neutra frente a su ataque de pilares de espadas. <strong>Absolute Radiance:</strong> Quédate en las tres plataformas inferiores centrales en su fase de ascenso y haz pogos continuos en su cabeza en la fase final de esferas de luz."
+                    },
+                    {
+                        nombre: "Tácticas Maestras para el Coliseo de los Insensatos",
+                        desc: "La tercera prueba es un examen de posicionamiento vertical. La clave es dominar las fases en las que el suelo se cubre de pinchos y debes mantenerte en las paredes.",
+                        aplicacion: "Equipa <strong>Gloria del Maestro de las Uñas</strong> y <strong>Piedra del Chamán</strong>. Carga un Gran Corte de aguijón antes de que los enemigos aparezcan en pantalla para matarlos de un solo golpe. Durante la fase aérea, utiliza el pogo rítmico sobre los mosquitos para restaurar tus saltos."
+                    }
+                ],
+                jefes: [
+                    { nombre: "Nightmare King Grimm", consejos: "Aprende el ritmo. En la fase de pilares de fuego, camina lento en un solo sentido para arrastrar los pilares y usa <em>Chillido del Abismo</em> en el cuarto pilar para un daño masivo." },
+                    { nombre: "Absolute Radiance", consejos: "Equípate la Piedra del Chamán. En la fase de plataformas, quédate pacientemente en la plataforma del centro e inflígele daño masivo cuando se teletransporte cerca de ti." },
+                    { nombre: "Coliseo de los Insensatos", consejos: "Equipa el amuleto <strong>Gloria del Maestro de las Uñas</strong>. Las artes cargadas derrotan instantáneamente a los enemigos voladores más problemáticos." }
+                ],
+                skips: [
+                    { nombre: "Mosquito Skip (Greenpath)", desc: "Atrae un mosquito volador al borde de la entrada de Sendero Verde para rebotar en él con pogo y subir a un saliente inaccesible." },
+                    { nombre: "Atajo de Lago Azul", desc: "Permite usar un pogo preciso en los restos de una lámpara metálica en los Cruces para ascender al Lago Azul tempranamente." }
+                ]
+            },
+            secretos: {
+                title: "Expansiones y Modificaciones del Juego",
+                dlcs: [
+                    { nombre: "Godmaster", contenido: "Accede al Hogar de los Dioses y los desafiantes Panteones que albergan a los jefes en su versión absoluta." },
+                    { nombre: "The Grimm Troupe", contenido: "Inicia la danza del fuego y enfrenta al temible Rey Pesadilla Grimm." },
+                    { nombre: "Lifeblood", contenido: "Actualización técnica que mejora la física de los enemigos e introduce al Hive Knight." }
+                ],
+                mods: [
+                    { nombre: "Pale Court (Corte Pálida)", contenido: "Añade batallas completas, voces, música y mecánicas únicas contra los Cinco Grandes Caballeros de Hallownest." },
+                    { nombre: "Item Randomizer", contenido: "Desorganiza por completo el mapa, colocando amuletos y habilidades clave en lugares completamente inesperados." }
+                ]
+            }
+        };
+
+        function renderTab(tabId) {
+            const container = document.getElementById('dynamic-content');
+            let html = '';
+
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            if (tabId === 'inicio') {
+                const data = pageData.inicio;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="text-center max-w-3xl mx-auto">
+                                <h2 class="text-lg font-bold text-gray-100 flex items-center justify-center gap-1.5">
+                                    <span class="soul-glow text-sky-400">✨</span> ${data.title}
+                                </h2>
+                                <p class="text-[11px] text-gray-400 leading-normal mt-1">${data.intro}</p>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-[#151921] p-3 rounded-xl border border-gray-800 flex flex-col justify-between hover:border-sky-500/50 transition">
+                                    <h3 class="text-xs font-bold text-gray-100">💻 Versión PC</h3>
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-normal">La experiencia definitiva con soporte nativo de mods comunitarios.</p>
+                                    <a href="${data.links.pc}" target="_blank" class="text-center py-1.5 mt-2 rounded bg-sky-400 hover:bg-sky-300 text-black text-xs font-bold transition">Descargar PC</a>
+                                </div>
+                                <div class="bg-[#151921] p-3 rounded-xl border border-gray-800 flex flex-col justify-between hover:border-amber-500/50 transition">
+                                    <h3 class="text-xs font-bold text-gray-100">📱 Versión Android</h3>
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-normal">Optimizado con controles táctiles avanzados adaptados a la pantalla.</p>
+                                    <a href="${data.links.phone}" target="_blank" class="text-center py-1.5 mt-2 rounded bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition">Descargar Android</a>
+                                </div>
+                            </div>
+
+                            <!-- 1-Bocasucia -->
+                            <div class="grid grid-cols-2 gap-3 items-center bg-[#151921]/60 p-3 rounded-xl border border-gray-800/80">
+                                <div class="text-xs">
+                                    <h4 class="font-bold text-gray-200">1. Bocasucia: La Ciudad Desvaneciente</h4>
+                                    <p class="text-[10px] text-gray-400 mt-1 leading-normal">El pozo inicial hacia las profundidades de Hallownest.</p>
+                                </div>
+                                <div class="hk-frame rounded-xl overflow-hidden h-28 flex items-center justify-center p-0.5">
+                                    <img src="${remoteImages.bocasucia}" alt="Bocasucia la ciudad desvaneciente" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Bocasucia')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+            } else if (tabId === 'instalacion') {
+                const data = pageData.instalacion;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="border-b border-gray-800 pb-2">
+                                <h2 class="text-md font-bold text-gray-100 flex items-center gap-1.5">
+                                    <span class="text-sky-400">🎮</span> ${data.title}
+                                </h2>
+                                <p class="text-[10px] text-gray-400 mt-0.5">${data.intro}</p>
+                            </div>
+
+                            <!-- 2-Libreria de Steam -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2 space-y-2">
+                                    ${data.pasos.map(p => `
+                                        <div class="flex gap-2 items-start bg-[#14171d] p-2.5 rounded-lg border border-gray-800">
+                                            <span class="w-5 h-5 rounded-full bg-sky-500/10 border border-sky-500 text-sky-400 flex items-center justify-center font-bold text-[10px] shrink-0">${p.paso}</span>
+                                            <span class="text-[10px] text-gray-300 leading-normal">${p.desc}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="hk-frame rounded-xl overflow-hidden h-28 flex items-center justify-center p-0.5">
+                                        <img src="${remoteImages.steam}" alt="Libreria de Steam" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Librería de Steam')">
+                                    </div>
+                                    <div class="bg-sky-950/20 border border-sky-500/30 p-2.5 rounded-lg text-[9px] text-sky-300 leading-normal">
+                                        💡 ${data.consejo}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+            } else if (tabId === 'lore') {
+                const data = pageData.lore;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="border-b border-gray-800 pb-2">
+                                <h2 class="text-md font-bold text-gray-100 flex items-center gap-1.5">
+                                    <span class="text-sky-400">📖</span> Hallownest, Leyendas y Geografía
+                                </h2>
+                            </div>
+
+                            <!-- 3-Radiance -->
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <div class="bg-[#14171d] p-3 rounded-xl border border-gray-800 text-[10px]">
+                                        <h3 class="font-bold text-sky-400">${data.pregunta}</h3>
+                                        <p class="text-gray-300 leading-normal mt-1">${data.text_intro}</p>
+                                    </div>
+                                    <div class="bg-amber-950/15 p-3 rounded-xl border border-amber-500/20 text-[10px]">
+                                        <h3 class="font-bold text-amber-500 infection-glow">3. El Destello (Radiance)</h3>
+                                        <p class="text-gray-300 leading-normal mt-1">${data.historia}</p>
+                                    </div>
+                                </div>
+                                <div class="hk-frame rounded-xl overflow-hidden h-40 md:h-full flex items-center justify-center p-0.5">
+                                    <img src="${remoteImages.radiance}" alt="Radiance" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'El Destello (Radiance)')">
+                                </div>
+                            </div>
+
+                            <!-- 4-Greenpath -->
+                            <div>
+                                <h3 class="text-xs font-bold text-gray-200 mb-2">🗺️ Zonas e Hitbox del Reino</h3>
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <div class="md:col-span-2 grid grid-cols-2 gap-2">
+                                        ${data.zonas.slice(0, 4).map(z => `
+                                            <div class="bg-[#111317] p-2.5 rounded-lg border border-gray-800 text-[10px]">
+                                                <h4 class="font-bold text-sky-400">${z.nombre}</h4>
+                                                <p class="text-gray-400 leading-tight mt-1 text-[9px]">${z.clave}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <div class="hk-frame rounded-xl overflow-hidden h-28 md:h-full flex items-center justify-center p-0.5">
+                                        <img src="${remoteImages.greenpath}" alt="Greenpath" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Greenpath (Sendero Verde)')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+            } else if (tabId === 'arsenal') {
+                const data = pageData.arsenal;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="border-b border-gray-800 pb-2">
+                                <h2 class="text-md font-bold text-gray-100 flex items-center gap-1.5">
+                                    <span class="text-sky-400">🛡️</span> Armamento y Sistema de Combinación
+                                </h2>
+                            </div>
+
+                            <!-- 5-Inventario -->
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <h3 class="text-xs font-bold text-gray-200">5. Inventario de Viaje</h3>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        ${data.habilidades.slice(0, 4).map(h => `
+                                            <div class="bg-[#14171d] p-2 rounded-lg border border-gray-800 text-[9px]">
+                                                <h4 class="font-bold text-gray-200">${h.nombre}</h4>
+                                                <p class="text-gray-400 mt-0.5 leading-tight">${h.desc}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="hk-frame rounded-xl overflow-hidden h-28 md:h-36 flex items-center justify-center p-0.5">
+                                    <img src="${remoteImages.inventario}" alt="Inventario" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Inventario')">
+                                </div>
+                            </div>
+
+                            <!-- 6-Amuletos -->
+                            <div class="grid md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2 space-y-2">
+                                    <h3 class="text-xs font-bold text-gray-200">6. Amuletos de Poder</h3>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        ${data.amuletos.map(a => `
+                                            <div class="bg-[#111722] p-2 rounded-lg border border-gray-800 text-[9px] flex justify-between items-start gap-1">
+                                                <div>
+                                                    <h4 class="font-bold text-gray-200">${a.nombre}</h4>
+                                                    <p class="text-[8px] text-gray-400 leading-tight">${a.desc}</p>
+                                                </div>
+                                                <div class="flex shrink-0">${renderNotches(a.costo)}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="hk-frame rounded-xl overflow-hidden h-28 md:h-full flex items-center justify-center p-0.5">
+                                    <img src="${remoteImages.amuletos}" alt="Amuletos" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Amuletos')">
+                                </div>
+                            </div>
+
+                            <!-- Análisis de Radar -->
+                            <div class="bg-[#151921]/40 p-4 rounded-xl border border-gray-800/80">
+                                <h3 class="text-xs font-bold text-gray-200 mb-2">Eficiencia de builds de Amuletos</h3>
+                                <div class="chart-container">
+                                    <canvas id="buildsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+                setTimeout(initChart, 100);
+
+            } else if (tabId === 'combate') {
+                const data = pageData.combate;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="bg-gradient-to-r from-red-950/15 to-transparent p-3 rounded-xl border border-red-900/30">
+                                <h2 class="text-md font-bold text-red-400 flex items-center gap-1.5">
+                                    <span class="text-red-500">⚔️</span> ${data.title}
+                                </h2>
+                                <p class="text-[9px] text-gray-400 mt-0.5">${data.descripcion}</p>
+                            </div>
+
+                            <div>
+                                <h3 class="text-xs font-bold text-gray-200 mb-2">Mecánicas de Movimiento y Combate</h3>
+                                <div class="space-y-2">
+                                    ${data.tecnicas.map((t, idx) => `
+                                        <div class="bg-[#111317] rounded-lg border border-gray-800 overflow-hidden">
+                                            <button class="w-full text-left p-2.5 font-bold text-[10px] hover:bg-gray-800/20 flex justify-between items-center text-gray-200" onclick="toggleAccordion('tech-${idx}')">
+                                                <span>⚡ ${t.nombre}</span>
+                                                <span id="icon-tech-${idx}" class="text-gray-500">▼</span>
+                                            </button>
+                                            <div id="tech-${idx}" class="accordion-content p-2.5 border-t border-gray-800/50 bg-black/30 text-[9px] text-gray-400 leading-normal space-y-2">
+                                                <p>${t.desc}</p>
+                                                <div class="p-2 bg-sky-950/10 border-l-2 border-sky-500 rounded text-sky-400">
+                                                    ${t.aplicacion}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- 7-Grimm y 8-Rey Pesadilla Grimm -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <h3 class="text-[10px] font-bold text-red-400 grimm-glow">7. Grimm: Compañía</h3>
+                                    <div class="hk-frame rounded-xl overflow-hidden h-32 flex items-center justify-center p-0.5">
+                                        <img src="${remoteImages.grimm}" alt="Grimm" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Grimm')">
+                                    </div>
+                                </div>
+                                <div class="space-y-1">
+                                    <h3 class="text-[10px] font-bold text-red-500 grimm-glow">8. Rey Pesadilla</h3>
+                                    <div class="hk-frame rounded-xl overflow-hidden h-32 flex items-center justify-center p-0.5">
+                                        <img src="${remoteImages.reyPesadilla}" alt="Rey Pesadilla Grimm" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Rey Pesadilla')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+            } else if (tabId === 'secretos') {
+                const data = pageData.secretos;
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="border-b border-gray-800 pb-2">
+                                <h2 class="text-md font-bold text-gray-100 flex items-center gap-1.5">
+                                    <span class="text-sky-400">🔮</span> Expansiones y Modificaciones Populares
+                                </h2>
+                            </div>
+
+                            <!-- 9-Godmaster -->
+                            <div class="grid md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2 space-y-2 text-[10px]">
+                                    <h3 class="font-bold text-yellow-500">9. Godmaster: El Panteón Definitivo</h3>
+                                    ${data.dlcs.map(d => `
+                                        <div class="bg-[#111317] p-2.5 rounded-lg border border-gray-800">
+                                            <h4 class="font-bold text-sky-400 text-[10px]">${d.nombre}</h4>
+                                            <p class="text-gray-400 leading-normal text-[9px] mt-0.5">${d.contenido}</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="hk-frame rounded-xl overflow-hidden h-28 md:h-full flex items-center justify-center p-0.5">
+                                    <img src="${remoteImages.godmaster}" alt="Godmaster" class="w-full h-full object-cover rounded-lg" onerror="handleImageError(this, 'Godmaster')">
+                                </div>
+                            </div>
+
+                            <!-- 10-Corte Palida -->
+                            <div class="pt-4 border-t border-gray-800 text-[10px]">
+                                <h3 class="font-bold text-purple-400 mb-2">10. Corte Pálida / Pale Court</h3>
+                                <p class="text-gray-400 leading-normal">
+                                    Una de las expansiones hechas por fans más épicas. Añade batallas detalladas contra los cinco Caballeros Reales del Rey Pálido.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+            } else if (tabId === 'oraculo') {
+                html = `
+                    <div class="fade-in flex flex-col justify-between h-full">
+                        <div class="content-scrollable space-y-4">
+                            <div class="border-b border-gray-800 pb-2">
+                                <h2 class="text-md font-bold text-cyan-400 flex items-center gap-1.5">
+                                    <span class="soul-glow">✨</span> Oráculo del Abismo
+                                </h2>
+                                <p class="text-[9px] text-sky-400/80 uppercase tracking-widest mt-0.5">Consulta Hallownest mediante la API de Gemini</p>
+                            </div>
+
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <div class="bg-[#14171d] p-3 rounded-xl border border-gray-800 flex flex-col justify-between text-[10px] gap-2">
+                                    <div>
+                                        <h3 class="font-bold text-sky-400">Sabio del Vacío</h3>
+                                        <p class="text-[9px] text-gray-400 leading-normal mt-0.5">Consulta cualquier misterio o consejo para un jefe.</p>
+                                    </div>
+                                    <textarea id="oracle-input" placeholder="Ej: ¿Quién es el Rey Pálido?" class="w-full h-16 bg-black/60 border border-gray-800 rounded-lg p-2 text-[10px] text-gray-200 focus:border-sky-500 focus:outline-none transition"></textarea>
+                                    <button onclick="askOracle()" id="oracle-submit" class="w-full py-1.5 rounded bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-[10px] transition">✨ Invocar</button>
+                                    <div id="oracle-loading" class="hidden text-[9px] text-sky-400 text-center animate-pulse">Consultando el Abismo...</div>
+                                    <div id="oracle-response" class="p-2 bg-black/40 border border-gray-800 rounded text-[9px] text-gray-300 leading-normal max-h-32 overflow-y-auto hidden"></div>
+                                </div>
+
+                                <div class="bg-[#14171d] p-3 rounded-xl border border-gray-800 flex flex-col justify-between text-[10px] gap-2">
+                                    <div>
+                                        <h3 class="font-bold text-cyan-400">Forja de Amuletos</h3>
+                                        <p class="text-[9px] text-gray-400 leading-normal mt-0.5">La IA forjará una build y actualizará el gráfico.</p>
+                                    </div>
+                                    <input type="text" id="forge-input" placeholder="Ej: Atacar rápido y curarme." class="w-full bg-black/60 border border-gray-800 rounded-lg p-2 text-[10px] text-gray-200 focus:border-cyan-500 focus:outline-none transition">
+                                    <button onclick="forgeCharms()" id="forge-submit" class="w-full py-1.5 rounded bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-[10px] transition">✨ Forjar</button>
+                                    <div id="forge-loading" class="hidden text-[9px] text-cyan-400 text-center animate-pulse">Modelando build...</div>
+                                    <div id="forge-response" class="p-2 bg-black/40 border border-gray-800 rounded text-[9px] text-gray-300 leading-normal hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+            }
+        }
+
+        async function askOracle() {
+            const inputEl = document.getElementById('oracle-input');
+            const responseEl = document.getElementById('oracle-response');
+            const loadingEl = document.getElementById('oracle-loading');
+            const submitBtn = document.getElementById('oracle-submit');
+            
+            const question = inputEl.value.trim();
+            if (!question) return;
+
+            loadingEl.classList.remove('hidden');
+            responseEl.classList.add('hidden');
+            submitBtn.disabled = true;
+
+            const systemPrompt = `Eres un sabio y solemne archivero místico del reino en ruinas de Hallownest, de Hollow Knight. Responde a la pregunta del usuario en español, utilizando un tono poético, melancólico, respetuoso y sumamente inmersivo con el universo del juego. No rompas tu personaje bajo ninguna circunstancia. Si la pregunta no se relaciona con Hollow Knight, responde solemnemente que los secretos de otras tierras están ocultos tras la niebla.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: question }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            try {
+                const result = await fetchGemini(payload);
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    responseEl.innerHTML = text.replace(/\n/g, '<br>');
+                    responseEl.classList.remove('hidden');
+                } else {
+                    responseEl.textContent = "El vacío permaneció en silencio...";
+                    responseEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                responseEl.textContent = error.message;
+                responseEl.classList.remove('hidden');
+            } finally {
+                loadingEl.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function forgeCharms() {
+            const inputEl = document.getElementById('forge-input');
+            const responseEl = document.getElementById('forge-response');
+            const loadingEl = document.getElementById('forge-loading');
+            const submitBtn = document.getElementById('forge-submit');
+
+            const styleDescription = inputEl.value.trim();
+            if (!styleDescription) return;
+
+            loadingEl.classList.remove('hidden');
+            responseEl.classList.add('hidden');
+            submitBtn.disabled = true;
+
+            const systemPrompt = `Eres un armero experto y maestro de combate de Hollow Knight. Diseña una build óptima de amuletos en base a la descripción del estilo de juego proporcionada por el usuario. Debes responder estrictamente con un objeto JSON en español, sin texto adicional antes ni después del bloque JSON, respetando el siguiente esquema exacto:
+            {
+                "buildName": "Nombre épico de la build en español",
+                "charmsList": [
+                    { "name": "Nombre de amuleto 1", "cost": 3, "effect": "Efecto rápido resumido" }
+                ],
+                "justification": "Explicación de por qué esta combinación funciona.",
+                "stats": [fisico, magia, defensa, movilidad]
+            }
+            Donde "stats" es una lista de exactamente 4 números enteros de 0 a 100 para el radar.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: styleDescription }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            try {
+                const result = await fetchGemini(payload);
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                const data = JSON.parse(text);
+
+                if (data) {
+                    let charmsHtml = data.charmsList.map(c => `
+                        <div class="bg-black/40 p-1.5 rounded border border-gray-800/80 flex justify-between items-center text-[8px] mt-1">
+                            <div>
+                                <strong class="text-sky-300">${c.name}</strong>
+                                <span class="text-gray-400 block">${c.effect}</span>
+                            </div>
+                            <span class="text-[8px] text-gray-500 bg-gray-900 px-1.5 py-0.5 rounded">Costo: ${c.cost}</span>
+                        </div>
+                    `).join('');
+
+                    responseEl.innerHTML = `
+                        <div>
+                            <h4 class="text-[10px] font-bold text-cyan-400">🔨 Build: ${data.buildName}</h4>
+                            <p class="text-[9px] text-gray-400 italic mb-2">${data.justification}</p>
+                            ${charmsHtml}
+                        </div>
+                    `;
+                    responseEl.classList.remove('hidden');
+
+                    pageData.arsenal.builds.push({
+                        nombre: `✨ Forjada: ${data.buildName}`,
+                        desc: data.justification,
+                        stats: data.stats
+                    });
+
+                    if (currentChart) {
+                        currentChart.data.datasets.push({
+                            label: `✨ ${data.buildName}`,
+                            data: data.stats,
+                            backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                            borderColor: 'rgba(34, 211, 238, 0.8)',
+                            pointBackgroundColor: 'rgba(34, 211, 238, 1)',
+                            borderWidth: 2
+                        });
+                        currentChart.update();
+                    }
+                }
+            } catch (error) {
+                responseEl.innerHTML = `<p class="text-xs text-red-400 font-mono">${error.message}</p>`;
+                responseEl.classList.remove('hidden');
+            } finally {
+                loadingEl.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('buildsChart');
+            if (!ctx) return;
+
+            if (currentChart) currentChart.destroy();
+
+            const dataObj = pageData.arsenal.builds;
+
+            const datasets = dataObj.map((b, i) => {
+                let color = '56, 189, 248'; 
+                if (i === 1) color = '236, 72, 153'; 
+                if (i === 2) color = '245, 158, 11'; 
+                if (i > 2) color = '34, 211, 238'; 
+
+                return {
+                    label: b.nombre,
+                    data: b.stats,
+                    backgroundColor: `rgba(${color}, 0.1)`,
+                    borderColor: `rgba(${color}, 0.8)`,
+                    pointBackgroundColor: `rgba(${color}, 1)`,
+                    borderWidth: 2
+                };
+            });
+
+            currentChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Físico / Aguijón', 'Magia / Alma', 'Defensa / Cura', 'Movilidad'],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                color: '#9ca3af',
+                                font: { family: 'Inter', size: 9 } 
+                            } 
+                        }
+                    },
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.08)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.08)' },
+                            pointLabels: { 
+                                font: { family: 'Inter', size: 8 }, 
+                                color: '#9ca3af' 
+                            },
+                            ticks: { display: false, min: 0, max: 100 }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTab('inicio');
+        });
+
+        window.switchTab = renderTab;
+        window.toggleAccordion = toggleAccordion;
+
+    </script>
+</body>
+</html>
